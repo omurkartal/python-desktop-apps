@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QDialog, QFrame, QGroupBox, QLabel, QMainWindow, QMe
 class Constants:
     NEW_GAME = "new-game"
     LEVEL_EASY = "Easy"
-    LEVEL_EASY_COUNT = 4
+    LEVEL_EASY_COUNT = 9
     LEVEL_MEDIUM  = "Medium"
     LEVEL_MEDIUM_COUNT  = 15
     LEVEL_HARD  = "Hard"
@@ -17,6 +17,38 @@ class Constants:
     MINE_INDICATOR = "X"
     MINE_SUSPICION = "?"
     NO_MINE_TEXT = ""
+
+class MineBoard:
+    gamesPlayedCount = 0
+    gamesWonCount = 0
+    cellNumber = 0
+    matrix = np.zeros((1, 1))
+
+    def __init__(self):
+        super().__init__()
+
+    def startNewGame(self, cellNumber):
+        self.cellNumber=cellNumber
+        self.gamesPlayedCount += 1
+        self.matrix = np.full((self.cellNumber, self.cellNumber), "0", dtype=np.str0)
+        mines = random.sample(range(self.cellNumber * self.cellNumber), self.cellNumber)
+        for i in range(0, len(mines)):
+            division = mines[i] // self.cellNumber
+            remainder = mines[i] % self.cellNumber
+            self.matrix[division][remainder] = Constants.MINE_INDICATOR
+        self.markMineFields()
+        print(self.matrix)
+
+    def markMineFields(self):
+        for i in range(0, self.cellNumber):
+            for j in range(0, self.cellNumber):
+                if self.matrix[i][j] == Constants.MINE_INDICATOR:
+                    for x in (i-1, i, i+1):
+                        for y in (j-1, j, j+1):
+                            if (x >= 0) and (x < self.cellNumber) and (y >= 0) and (y < self.cellNumber) and ((x!=i) or (y!=j)):
+                                #print("["+str(i)+", "+str(j)+"] --> ["+str(a)+", "+str(b)+"]:"+self.matrix[a][b])
+                                if self.matrix[x][y] != Constants.MINE_INDICATOR:
+                                    self.matrix[x][y] = str(int(self.matrix[x][y])+1)
 
 class DifficultyDialogBox(QDialog):
     selectedLevel = ""
@@ -127,7 +159,8 @@ class UI(QWidget):
         super().__init__()
         self.cellNumber = 0
         self.minesFound = 0
-        self.mineSweeper = MineSweeper()
+        self.falseSelections = 0
+        self.mineSweeper = MineBoard()
         self.initUI()
 
     def initUI(self):
@@ -168,6 +201,7 @@ class UI(QWidget):
 
     def startNewGame(self):
         self.minesFound = 0
+        self.falseSelections = 0
         self.mineSweeper.startNewGame(self.cellNumber)
         self.clearButtonsFromLayout()
         self.layout.setSpacing(1)
@@ -196,12 +230,17 @@ class UI(QWidget):
             button.setText(Constants.MINE_SUSPICION)
             if button.hiddenValue == Constants.MINE_INDICATOR:
                 self.minesFound += 1
+            else:
+                self.falseSelections += 1
         else:
             button.setText(Constants.NO_MINE_TEXT)
             if button.hiddenValue == Constants.MINE_INDICATOR:
                 self.minesFound -= 1
-        print("self.minesFound:" + str(self.minesFound))
-        if self.minesFound == self.cellNumber:
+            else:
+                self.falseSelections -= 1
+        
+        print("minesFound:" + str(self.minesFound) + ", falseSelections:" + str(self.falseSelections))
+        if (self.minesFound == self.cellNumber) and (self.falseSelections < 1):
             self.endTheGame(True)
 
     def cleanCellsHaveNoMineNeighbor(self,i,j):
@@ -211,11 +250,12 @@ class UI(QWidget):
                 if (x >= 0) and (x < self.cellNumber) and (y >= 0) and (y < self.cellNumber) and ((x!=i) or (y!=j)):
                     #print("["+str(i)+", "+str(j)+"] --> ["+str(x)+", "+str(y)+"]:")
                     button=self.layout.itemAt(x*self.cellNumber+y).widget()
-                    if (button.hiddenValue == Constants.NO_MINE_TEXT) and (button.isActive):
-                        neighborList.append([x, y])
-                    button.setText(button.hiddenValue)
-                    button.setDisabled(True)
-                    button.isActive=False
+                    if button.text() != Constants.MINE_SUSPICION:
+                        if (button.hiddenValue == Constants.NO_MINE_TEXT) and (button.isActive):
+                            neighborList.append([x, y])
+                        button.setText(button.hiddenValue)
+                        button.setDisabled(True)
+                        button.isActive=False
         for item in neighborList:
             self.cleanCellsHaveNoMineNeighbor(item[0],item[1])
 
@@ -242,38 +282,6 @@ class UI(QWidget):
     def clearButtonsFromLayout(self):
         for i in reversed(range(self.layout.count())): 
             self.layout.itemAt(i).widget().setParent(None)
-
-class MineSweeper:
-    gamesPlayedCount = 0
-    gamesWonCount = 0
-    cellNumber = 0
-    matrix = np.zeros((1, 1))
-
-    def __init__(self):
-        super().__init__()
-
-    def startNewGame(self, cellNumber):
-        self.cellNumber=cellNumber
-        self.gamesPlayedCount += 1
-        self.matrix = np.full((self.cellNumber, self.cellNumber), "0", dtype=np.str0)
-        mines = random.sample(range(self.cellNumber * self.cellNumber), self.cellNumber)
-        for i in range(0, len(mines)):
-            division = mines[i] // self.cellNumber
-            remainder = mines[i] % self.cellNumber
-            self.matrix[division][remainder] = Constants.MINE_INDICATOR
-        self.markMineFields()
-        print(self.matrix)
-
-    def markMineFields(self):
-        for i in range(0, self.cellNumber):
-            for j in range(0, self.cellNumber):
-                if self.matrix[i][j] == Constants.MINE_INDICATOR:
-                    for x in (i-1, i, i+1):
-                        for y in (j-1, j, j+1):
-                            if (x >= 0) and (x < self.cellNumber) and (y >= 0) and (y < self.cellNumber) and ((x!=i) or (y!=j)):
-                                #print("["+str(i)+", "+str(j)+"] --> ["+str(a)+", "+str(b)+"]:"+self.matrix[a][b])
-                                if self.matrix[x][y] != Constants.MINE_INDICATOR:
-                                    self.matrix[x][y] = str(int(self.matrix[x][y])+1)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
